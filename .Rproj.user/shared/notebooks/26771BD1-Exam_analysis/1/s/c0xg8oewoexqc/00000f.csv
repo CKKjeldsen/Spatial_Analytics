@@ -1,0 +1,8 @@
+"0","# Trees per 500 m  hex grid"
+"0","hex_grid <- st_make_grid(districts_utm, cellsize = 500, square = FALSE) %>%"
+"0","  st_sf() %>%"
+"0","  st_intersection(st_union(districts_utm)) %>%"
+"0","  mutate(hex_id = row_number(),"
+"0","    tree_count = lengths(st_contains(., trees_utm)),"
+"0","    area_km2 = as.numeric(st_area(.)) / 1e6,"
+"0","    tree_density = tree_count / area_km2)"

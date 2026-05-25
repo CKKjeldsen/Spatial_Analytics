@@ -1,0 +1,7 @@
+"0","# Make observation window from union of districts"
+"0","city_boundary <- st_union(districts_utm)"
+"0","city_window <- as.owin(city_boundary)"
+"0",""
+"0","# Get coordinates from trees"
+"0","tree_coords <- st_coordinates(trees_utm)"
+"0","trees_ppp <- ppp(x = tree_coords[, ""X""], y = tree_coords[, ""Y""], window = city_window)"

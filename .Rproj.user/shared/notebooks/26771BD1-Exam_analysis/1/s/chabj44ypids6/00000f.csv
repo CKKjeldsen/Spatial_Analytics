@@ -1,0 +1,8 @@
+"0","# Trees per 250x250m grid"
+"0","sq_grid <- st_make_grid(districts_utm, cellsize = 250, square = TRUE) %>%"
+"0","  st_sf() %>%"
+"0","  st_intersection(st_union(districts_utm)) %>%"
+"0","  mutate(cell_id = row_number(),"
+"0","    tree_count = lengths(st_contains(., trees_utm)),"
+"0","    area_km2 = as.numeric(st_area(.)) / 1e6,"
+"0","    tree_density = tree_count / area_km2)"

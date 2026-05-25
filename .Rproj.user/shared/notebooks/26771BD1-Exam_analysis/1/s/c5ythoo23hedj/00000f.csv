@@ -1,0 +1,7 @@
+"0","# Find the ratio between the least-served and most-served districts"
+"0","districts_utm_res %>%"
+"0","  st_drop_geometry() %>%"
+"0","  select(navn, trees_per_res_building) %>%"
+"0","  arrange(desc(trees_per_res_building)) %>%"
+"0","  slice(c(1, n())) %>%"
+"0","  mutate(ratio = first(trees_per_res_building) / last(trees_per_res_building))"

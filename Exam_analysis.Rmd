@@ -1,0 +1,320 @@
+---
+title: "A geostatistical analysis of the equitability of the distribution of municipal trees in Copenhagen"
+author: "Christian K. Kjeldsen"
+date: "r format(Sys.time(), '%B %d, %Y')"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(rmdformats)
+library(tmap)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+               cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+
+knitr::opts_chunk$set(echo = TRUE)
+# Use static maps for knitting instead of interactive:
+tmap_mode("plot")
+```
+
+
+```{r libraries, include=FALSE}
+# load needed libraries
+library(sf)
+library(tidyverse)
+library(spatstat)
+library(sfarrow)
+library(mapview)
+```
+
+```{r load data, cache=TRUE}
+# Load districts
+districts <- st_read("data/districts.json")
+# Test they look right
+# plot(districts)
+
+# Load trees from URL. It takes some time due to the large size of this dataset. 
+URL <- "https://wfs-kbhkort.kk.dk/k101/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=k101:trae_basis&outputFormat=application%2Fjson&SRSNAME=EPSG:4326&Maxfeatures=100000"
+trees <- st_read(URL)
+
+# Test data with 500 trees is provided in the data/ folder. 
+# Alternatively, load the test-dataset using line below, removing '#':
+#test_trees <- st_read("data/trees_500_test_data.json")
+# And replace all instances of "trees" with "test_trees" in the below code. 
+```
+
+
+```{r check data numbers}
+# Check number of districs and trees
+cat("Districts:", nrow(districts), "\n")
+cat("Trees:", nrow(trees))
+```
+
+
+```{r clean tree data and set WGS84}
+# Keep only location in tree dataset, dropping all unused columns
+trees <- trees %>% select(geometry)
+
+# Make sure both layers are WGS84 (EPSG:4326) 
+districts <- st_transform(districts, 4326)
+trees <- st_transform(trees, 4326)
+```
+
+```{r visual check of overlap, eval=FALSE}
+# Check that trees and districts overlap correctly now
+mapview(districts) + mapview(trees, cex = 1, col.regions = "forestgreen")
+```
+
+
+```{r project to UTM 32N and check overlap}
+# Project both to UTM 32N (EPSG:25832)
+districts_utm <- st_transform(districts, 25832)
+trees_utm <- st_transform(trees, 25832)
+
+# A non-visual check that the trees are within the districts:
+trees_utm <- trees_utm[st_intersects(trees_utm,
+                                      st_union(districts_utm),
+                                      sparse = FALSE)[,1], ]
+cat("Trees within districts:", nrow(trees_utm), "\n")
+```
+
+```{r tree densities per district}
+# Tree counts per district and tree density, in trees per square km
+districts_utm <- districts_utm %>%
+  mutate(tree_count = lengths(st_contains(districts_utm, trees_utm)),
+    area_km2 = as.numeric(st_area(districts_utm)) / 1e6,
+    tree_density = tree_count / area_km2)
+
+cat("\nTree counts per district:\n")
+print(districts_utm %>% st_drop_geometry() %>%
+        select(navn, tree_count, area_km2, tree_density) %>%
+        arrange(desc(tree_density)))
+
+```
+
+```{r tree density per 500m hex grid}
+# Trees per 500 m  hex grid
+hex_grid <- st_make_grid(districts_utm, cellsize = 500, square = FALSE) %>%
+  st_sf() %>%
+  st_intersection(st_union(districts_utm)) %>%
+  mutate(hex_id = row_number(),
+    tree_count = lengths(st_contains(., trees_utm)),
+    area_km2 = as.numeric(st_area(.)) / 1e6,
+    tree_density = tree_count / area_km2)
+```
+
+
+```{r tree density per square 250m grid}
+# Trees per 250x250m grid
+sq_grid <- st_make_grid(districts_utm, cellsize = 250, square = TRUE) %>%
+  st_sf() %>%
+  st_intersection(st_union(districts_utm)) %>%
+  mutate(cell_id = row_number(),
+    tree_count = lengths(st_contains(., trees_utm)),
+    area_km2 = as.numeric(st_area(.)) / 1e6,
+    tree_density = tree_count / area_km2)
+```
+
+
+```{r map the tree densities per district, hex grid, and square grid}
+# Make maps of trees per district, hex grid, and square grid
+make_density_map <- function(sf_obj, density_col, title) {
+  tm_basemap("Esri.WorldGrayCanvas") +
+  tm_shape(sf_obj %>% filter(.data[[density_col]] > 0)) +
+    tm_polygons(
+      fill = density_col,
+      fill.scale  = tm_scale_intervals(style  = "quantile", n = 6, values = rev(hcl.colors(6, "YlGn"))), fill.legend = tm_legend(title = "Trees / km²"), fill_alpha = 0.8, col = "grey", lwd = 0.3) + tm_layout(title = title, legend.outside = TRUE)}
+
+# Make the three map objects
+map_districts <- make_density_map(districts_utm, "tree_density", "Tree density – Districts")
+
+map_hex <- make_density_map(hex_grid, "tree_density", "Tree density – 500 m hex grid")
+
+map_square <- make_density_map(sq_grid, "tree_density", "Tree density – 250 m square grid")
+
+# And save them to the output/ folder 
+tmap_save(tm = map_districts, filename = "C:/Users/ckjel.CK_THINKPAD/Desktop/CDS_Spatial/cds-spatial/Exam/output/map_districts.png", dpi = 300)
+tmap_save(tm = map_hex, filename = "C:/Users/ckjel.CK_THINKPAD/Desktop/CDS_Spatial/cds-spatial/Exam/output/map_hex.png", dpi = 300)
+tmap_save(tm = map_square, filename = "C:/Users/ckjel.CK_THINKPAD/Desktop/CDS_Spatial/cds-spatial/Exam/output/map_square.png", dpi = 300)
+
+```
+
+
+```{r combined tree density map}
+# Make a map showing the three side-by-side. 
+
+# Helper function to force legend to be visible in combined plot
+force_legend_right <- function(map) {map + tm_layout(legend.outside = FALSE, legend.position = c("right", "bottom"), legend.text.size = 1, legend.title.size = 1.5, title.size = 2.5)}
+
+# Side-by-side view of the three maps:
+combined_tree_density_map <- tmap_arrange(
+  force_legend_right(map_districts),
+  force_legend_right(map_hex),
+  force_legend_right(map_square),
+  ncol = 3)
+
+# Save to the output/ folder:
+tmap_save(tm = combined_tree_density_map, filename = "C:/Users/ckjel.CK_THINKPAD/Desktop/CDS_Spatial/cds-spatial/Exam/output/combined_tree_density_map.png", width = 24, height = 10, dpi = 300, units = "in")
+```
+
+
+```{r PPP}
+# Make observation window from union of districts
+city_boundary <- st_union(districts_utm)
+city_window <- as.owin(city_boundary)
+
+# Get coordinates from trees
+tree_coords <- st_coordinates(trees_utm)
+trees_ppp <- ppp(x = tree_coords[, "X"], y = tree_coords[, "Y"], window = city_window)
+```
+
+
+```{r quadrat test}
+# Divide area into 5×5 quadrats and test against complete spatial randomness, CSR
+qt <- quadrat.test(trees_ppp, nx = 5)
+print(qt)
+# shows that df = 19, p-value < 2.2e-16, that is p<<0.05, meaning we reject CSR 
+plot(qt, main = "Quadrat test – Copenhagen trees")
+
+# Try with smaller quadrats for robustness
+qt_1 <- quadrat.test(trees_ppp, nx = 10)
+print(qt_1)
+```
+
+
+```{r nearest-neighbor distance and G function, cache=TRUE, dependson="PPP"}
+# Find mean nearest neighbor distance
+mean_nnd <- mean(nndist(trees_ppp))
+cat("Mean nearest-neighbour distance:", mean_nnd, "m\n")
+# shows a mean nnd of 6.8 meters
+
+# G function with simulation envelope
+env_g <- envelope(trees_ppp, Gest, nsim = 99)
+
+plot(env_g, main = "G function - Copenhagen trees")
+# this shows that G is above the predicted envelope, which suggests that trees are clustered
+```
+
+
+```{r K function, cache=TRUE, dependson="PPP"}
+# K function with simulation envelope and border correction
+env_k <- envelope(trees_ppp, Kest, nsim = 99, correction = "border")
+
+plot(env_k, . - theo ~ r, main = "Linearised K function — Copenhagen trees", ylab = "K(r) - pi*r^2")
+# The line is above the zero line, meaning that there is more clustering than CSR at scale r (in meters). Trees are most clustered at the scale of the peak value relative to CSR, at approximately 650 m. We see however that trees are clustered at all scales. 
+```
+
+
+```{r BBR as proxy for population}
+# Introduce the BBR dataset as a proxy for population
+# load needed library
+library(jsonlite)
+
+# load BBR data
+bbr_cph_raw <- fromJSON(
+  "https://sciencedata.dk/public/67e2ad2ca642562dacfa6fdf672a1009/clean_BBR_cph_data.json")
+
+# Flatten it to a data frame and changing the name of a column to get rid of Danish letters
+flatten <- function(json) {
+  json <- as.data.frame(json[["BygningList"]])
+  names(json)[names(json) == "byg026Opførelsesår"] <- "byg026Year"
+  return(json)}
+
+# Filter away industrial and agricultural buildings
+clean_bbr_df <- function(df, year_cutoff) {
+  df %>%
+    filter(!is.na(byg404Koordinat)) %>%
+    filter(byg404Koordinat != "POINT(0 0)") %>%
+    filter(byg406Koordinatsystem == "5") %>%
+    filter(!is.na(byg026Year)) %>%
+    filter(byg021BygningensAnvendelse %in%
+             c("101","120","121","122","131","132","140","150","160","190",
+               "321","322","324","331","332","333","334","339",
+               "421","422","429","431","432","433","439","441",
+               "532","533")) %>%
+    distinct(id_lokalId, .keep_all = TRUE) %>%
+    filter(byg026Year >= year_cutoff)}
+
+bbr_cph <- bbr_cph_raw %>%
+  flatten() %>%
+  clean_bbr_df(year_cutoff = 1900) %>%
+  mutate(city = "Copenhagen") %>%
+  st_as_sf(wkt = "byg404Koordinat", crs = 25832)
+
+# Residential codes from BBRteknik
+residential_codes <- c("101","120","121","122","131","132","140","150","160","190")
+
+# Only keep those buildings which have residential codes 
+bbr_cph <- bbr_cph %>%
+  mutate(
+    building_type = if_else(
+      byg021BygningensAnvendelse %in% residential_codes,
+      "residential",
+      "non_residential"))
+
+# Join residential buildings to their districts
+districts_utm_res <- districts_utm %>%
+  mutate(residential_count  = lengths(st_contains(districts_utm, bbr_cph %>% filter(building_type == "residential"))))
+```
+
+
+```{r find number of trees per residential building}
+# Trees per residential building 
+districts_utm_res <- districts_utm_res %>%
+  mutate(trees_per_res_building = tree_count / pmax(residential_count, 1))
+ 
+trees_per_res <- districts_utm_res %>%
+  st_drop_geometry() %>%
+  select(navn, tree_count, residential_count, trees_per_res_building, tree_density) %>%
+  arrange(desc(trees_per_res_building))
+ 
+# Show trees per residential building in console
+print(trees_per_res)
+```
+
+```{r show trees per residential building on map}
+# Make a map with trees per residential building shown in colourscale 
+trees_per_res_building_map <- tm_basemap("Esri.WorldGrayCanvas") +
+  tm_shape(districts_utm_res) + tm_polygons( fill = "trees_per_res_building", fill.scale = tm_scale_intervals(breaks = seq(0, 10, by = 1), values = rev(hcl.colors(20, "YlGn"))), fill.legend = tm_legend(title = "Trees / residential building"), col = "grey40", lwd = 0.8, fill_alpha = 0.7) + tm_text("navn", size = 0.6)
+
+# Save to output folder
+tmap_save(tm = trees_per_res_building_map, filename = "C:/Users/ckjel.CK_THINKPAD/Desktop/CDS_Spatial/cds-spatial/Exam/output/trees_per_res_building_map.png", dpi = 300)
+```
+
+
+```{r find ratio between the least-served and most-served districts}
+# Find the ratio between the least-served and most-served districts
+districts_utm_res %>%
+  st_drop_geometry() %>%
+  select(navn, trees_per_res_building) %>%
+  arrange(desc(trees_per_res_building)) %>%
+  slice(c(1, n())) %>%
+  mutate(ratio = first(trees_per_res_building) / last(trees_per_res_building))
+# This shows that Indre By has 11 times more trees per residential building than Brønshøj-Husum.
+```
+
+
+```{r correlation}
+# Define 'income' dataframe from "Status på København 2025" report:
+income <- data.frame(navn = c("Indre By", "Østerbro", "Nørrebro", "Vesterbro-Kongens Enghave", "Valby", "Vanløse", "Brønshøj-Husum", "Bispebjerg", "Amager Øst", "Amager Vest"), mean_income = c(362, 316, 242, 288, 272, 291, 270, 236, 276, 285))
+
+# Join it to the trees per residential building dataframe:
+trees_per_res <- trees_per_res %>% left_join(income, by = "navn")
+
+# Do a Spearman correlation test:
+cor.test(trees_per_res$trees_per_res_building, 
+         trees_per_res$mean_income, 
+         method = "spearman")
+```
+

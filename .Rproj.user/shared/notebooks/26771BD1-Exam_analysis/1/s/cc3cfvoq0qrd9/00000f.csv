@@ -1,0 +1,6 @@
+"0","# Keep only location in tree dataset, dropping all unused columns"
+"0","trees <- trees %>% select(geometry)"
+"0",""
+"0","# Make sure both layers are WGS84 (EPSG:4326) "
+"0","districts <- st_transform(districts, 4326)"
+"0","trees <- st_transform(trees, 4326)"

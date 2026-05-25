@@ -1,0 +1,7 @@
+"0","# Make a map with trees per residential building shown in colourscale "
+"0","trees_per_res_building_map <- tm_basemap(""Esri.WorldGrayCanvas"") +"
+"0","  tm_shape(districts_utm_res) + tm_polygons( fill = ""trees_per_res_building"", fill.scale = tm_scale_intervals(breaks = seq(0, 10, by = 1), values = rev(hcl.colors(20, ""YlGn""))), fill.legend = tm_legend(title = ""Trees / residential building""), col = ""grey40"", lwd = 0.8, fill_alpha = 0.7) + tm_text(""navn"", size = 0.6)"
+"0",""
+"0","# Save to output folder"
+"0","tmap_save(tm = trees_per_res_building_map, filename = ""C:/Users/ckjel.CK_THINKPAD/Desktop/CDS_Spatial/cds-spatial/Exam/output/trees_per_res_building_map.png"", dpi = 300)"
+"0"," "

@@ -1,0 +1,52 @@
+# Point data for Aarhus and Copenhagen based on BBR 2021 register (datafordeler.dk)
+
+#UNCOMMENT THIS IF YOU WANT TO PULL DATA FROM SCIENCEDATA.DK
+#bbr_cph_data <- fromJSON("https://sciencedata.dk/public/67e2ad2ca642562dacfa6fdf672a1009/clean_BBR_cph_data.json")
+#bbr_aarhus_data <- fromJSON("https://sciencedata.dk/public/67e2ad2ca642562dacfa6fdf672a1009/clean_BBR_aarhus_data.json")
+
+
+#flattening it to a data frame and changing the name of a column to get rid of danish letters
+flatten <- function(json){
+  json <- as.data.frame(json[["BygningList"]])
+  names(json)[names(json)=="byg026Opførelsesår"] <- "byg026Year"
+  return(json)
+}
+
+
+#filtering for buildings used for recreational,educational,habitation,health, light- and service industry out discarding other buildings, refer to BBRkodelister20210322 for the complete list of codes
+
+clean_bbr_df <-function(df, year_cutoff){
+  df %>% 
+  filter(!is.na(byg404Koordinat)) %>% 
+  filter(byg404Koordinat != "POINT(0 0)") %>% 
+  filter(byg406Koordinatsystem == "5") %>% 
+  filter(!is.na(byg026Year)) %>% 
+  filter(byg021BygningensAnvendelse %in% 
+           c("101","120","121","122","131","132","140","150","160","190","321","322","324","331","332","333","334","339","421","422","429","431","432","433","439","441","532","533")) %>% 
+  distinct(id_lokalId,.keep_all = TRUE) %>% 
+  filter(byg026Year >= year_cutoff)
+}
+
+
+bbr_cph_data_flat <- bbr_cph_data %>%
+  flatten() %>% 
+  clean_bbr_df(year_cutoff = 1900) %>% 
+  mutate(city = "Copenhagen")%>% 
+  st_as_sf(wkt = "byg404Koordinat", crs = 25832)
+
+bbr_aarhus_data_flat <-bbr_aarhus_data %>%
+  flatten() %>% 
+  clean_bbr_df(1900) %>% 
+  mutate(city = "Aarhus")%>% 
+  st_as_sf(wkt = "byg404Koordinat", crs = 25832)
+
+
+
+merged_bbr_data_flat <- rbind(bbr_cph_data %>%
+  flatten() %>% 
+  clean_bbr_df(year_cutoff = 1900) %>% 
+  mutate(city = "Copenhagen"), bbr_aarhus_data %>%
+  flatten() %>% 
+  clean_bbr_df(1900) %>% 
+  mutate(city = "Aarhus")) %>% 
+  st_as_sf(wkt = "byg404Koordinat", crs = 25832)
