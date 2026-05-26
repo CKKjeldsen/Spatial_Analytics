@@ -44,14 +44,14 @@ districts <- st_read("data/districts.json")
 # Test they look right
 # plot(districts)
 
+# Test data with 500 trees is provided in the data/ folder. 
+# The test dataset can be loaded using the line below, removing the '#':
+#trees <- st_read("data/trees_500_test_data.json")
+# If this is done, do not run lines 53-54.
+
 # Load trees from URL. It takes some time due to the large size of this dataset. 
 URL <- "https://wfs-kbhkort.kk.dk/k101/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=k101:trae_basis&outputFormat=application%2Fjson&SRSNAME=EPSG:4326&Maxfeatures=100000"
 trees <- st_read(URL)
-
-# Test data with 500 trees is provided in the data/ folder. 
-# Alternatively, load the test-dataset using line below, removing '#':
-#test_trees <- st_read("data/trees_500_test_data.json")
-# And replace all instances of "trees" with "test_trees" in the below code. 
 ```
 
 
