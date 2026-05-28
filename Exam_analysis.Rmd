@@ -3,7 +3,7 @@ title: "A geostatistical analysis of the equitability of the distribution of mun
 author: "Christian K. Kjeldsen"
 date: "r format(Sys.time(), '%B %d, %Y')"
 output:
-  rmdformats::readthedown:
+  rmdformats::html_docco:
     highlight: kate
 ---
 
@@ -216,8 +216,8 @@ plot(env_k, . - theo ~ r, main = "Linearised K function — Copenhagen trees", y
 ```
 
 
-```{r BBR as proxy for population}
-# Introduce the BBR dataset as a proxy for population
+```{r Introduce BBR}
+# Introduce the BBR dataset
 # load needed library
 library(jsonlite)
 
@@ -231,7 +231,7 @@ flatten <- function(json) {
   names(json)[names(json) == "byg026Opførelsesår"] <- "byg026Year"
   return(json)}
 
-# Filter away industrial and agricultural buildings
+# Filter away non-residential buildings
 clean_bbr_df <- function(df, year_cutoff) {
   df %>%
     filter(!is.na(byg404Koordinat)) %>%
